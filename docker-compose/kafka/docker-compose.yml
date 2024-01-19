@@ -1,0 +1,61 @@
+version: '3'
+services:
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: 'bitnami/kafka:latest'
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_SASL_ENABLED_MECHANISMS=PLAIN # 表示启用 PLAIN 方式的 SASL 认证
+      - KAFKA_CFG_SASL_MECHANISM_INTER_BROKER_PROTOCOL=PLAIN # 表示在 broker 之间的通信中使用 PLAIN 方式的 SASL 认证
+      - KAFKA_CFG_SASL_USERS=user:kafka123 # 表示创建一个用户名为 "user"，密码为 "kafka123" 的用户
+    ports:
+      - '9092:9092'
+
+  # 默认没有ElasticSearch Sink Connector, 需要手动安装, 然后重启镜像
+  # confluent-hub install confluentinc/kafka-connect-elasticsearch:14.0.12
+  # https://www.confluent.io/hub/confluentinc/kafka-connect-elasticsearch
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:latest
+    environment:
+      - CONNECT_BOOTSTRAP_SERVERS=kafka:9092
+      - CONNECT_REST_PORT=8083
+      - CONNECT_GROUP_ID=quickstart
+      - CONNECT_CONFIG_STORAGE_TOPIC=quickstart-config
+      - CONNECT_OFFSET_STORAGE_TOPIC=quickstart-offsets
+      - CONNECT_STATUS_STORAGE_TOPIC=quickstart-status
+      - CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1
+      - CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1
+      - CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1
+      - CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_INTERNAL_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_INTERNAL_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_REST_ADVERTISED_HOST_NAME=0.0.0.0
+    ports:
+      - '8083:8083'
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  kafka-rest:
+    image: confluentinc/cp-kafka-rest:latest
+    environment:
+      KAFKA_REST_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_REST_LISTENERS: http://0.0.0.0:8082
+      KAFKA_REST_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KAFKA_REST_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="user" password="kafka123";
+      KAFKA_REST_SASL_MECHANISM: PLAIN
+      KAFKA_REST_SECURITY_PROTOCOL: SASL_PLAINTEXT
+
+networks:
+  dev-env:
+    external: true
